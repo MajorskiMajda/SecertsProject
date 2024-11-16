@@ -10,12 +10,15 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const FacebookStrategy = require('passport-facebook').Strategy;
 const GitHubStrategy = require('passport-github').Strategy;
 const findOrCreate = require('mongoose-findorcreate');
+const flash = require('connect-flash');
+
 
 const app = express();
 
 app.use(express.static('public'));
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(flash());
 
 app.use(session({
     secret: "Secretcode",
@@ -73,24 +76,24 @@ passport.use(new FacebookStrategy({
     clientID: process.env.FACEBOOK_APP_ID,
     clientSecret: process.env.FACEBOOK_APP_SECRET,
     callbackURL: "http://localhost:3000/auth/facebook/secrets"
-  },
-  function(accessToken, refreshToken, profile, cb) {
-    User.findOrCreate({ facebookId: profile.id }, function (err, user) {
-      return cb(err, user);
-    });
-  }
+},
+    function (accessToken, refreshToken, profile, cb) {
+        User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+            return cb(err, user);
+        });
+    }
 ));
 
 passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
     callbackURL: "http://localhost:3000/auth/github/secrets"
-  },
-  function(accessToken, refreshToken, profile, cb) {
-    User.findOrCreate({ githubId: profile.id }, function (err, user) {
-      return cb(err, user);
-    });
-  }
+},
+    function (accessToken, refreshToken, profile, cb) {
+        User.findOrCreate({ githubId: profile.id }, function (err, user) {
+            return cb(err, user);
+        });
+    }
 ));
 
 app.get("/", (req, res) => {
@@ -106,7 +109,7 @@ app.get("/auth/google/secrets",
     }
 );
 app.get('/auth/facebook', (req, res) => {
-    passport.authenticate("facebook", { scope: ['public_profile', 'email']  })(req, res);
+    passport.authenticate("facebook", { scope: ['public_profile', 'email'] })(req, res);
 });
 app.get("/auth/facebook/secrets",
     passport.authenticate("facebook", { failureRedirect: '/' }),
@@ -115,26 +118,31 @@ app.get("/auth/facebook/secrets",
     }
 );
 app.get('/auth/github', (req, res) => {
-    passport.authenticate("github", { scope: ['email']  })(req, res);
+    passport.authenticate("github", { scope: ['email'] })(req, res);
 });
 
-  app.get('/auth/github/secrets', 
+app.get('/auth/github/secrets',
     passport.authenticate('github', { failureRedirect: '/login' }),
-    function(req, res) {
-      res.redirect('/secrets');
+    function (req, res) {
+        res.redirect('/secrets');
     });
 
 app.get("/login", (req, res) => {
-    res.render("login");
+    res.render("login", {
+        error: req.flash('error')
+    });
 });
 app.get("/register", (req, res) => {
-    res.render("register");
+    res.render("register", {
+        error: req.flash('error')
+    });
 });
 
 app.get("/secrets", (req, res) => {
     User.find({ "secret": { $ne: null } })
         .then(foundUsers => {
-            res.render("secrets", { usersWithSecrets: foundUsers });
+            res.render("secrets", { usersWithSecrets: foundUsers, user: req.user,
+                isAuthenticated: req.isAuthenticated() });
         })
         .catch(err => {
             console.log(err);
@@ -146,9 +154,10 @@ app.get("/submit", (req, res) => {
     if (req.isAuthenticated()) {
         res.render("submit");
     } else {
-        res.redirect("/submit");
+        res.redirect("/login");
     }
-})
+});
+
 
 app.post("/submit", (req, res) => {
     const submittedSecret = req.body.secret;
@@ -172,36 +181,49 @@ app.post("/submit", (req, res) => {
 });
 
 app.post("/register", (req, res) => {
-    User.register({ username: req.body.username }, req.body.password, (err, user) => {
-        if (err) {
-            console.log(err);
-            return res.redirect("/register");
-        }
-        req.logIn(user, (err) => {
-            if (err) {
-                console.log(err);
-                return res.redirect("/register");
-            }
-            return res.redirect("/secrets");
-        });
-    });
-});
+    const { username, password } = req.body;
+  
+    if (!username || !password) {
+      req.flash('error', 'Please enter both your email and password.');
+      return res.redirect("/register");
+    }
 
-app.post("/login", (req, res) => {
-    const user = new User({
-        username: req.body.username,
-        password: req.body.password
-    });
-    req.logIn(user, (err) => {
-        console.log(user)
+    User.register({ username }, password, (err, user) => {
+      if (err) {
+        req.flash('error', 'An error occurred while registering. Please try again.');
+        console.log(err);
+        return res.redirect("/register");
+      }
+  
+      req.logIn(user, (err) => {
         if (err) {
-            console.log(err);
-            return res.redirect("/register");
+          req.flash('error', 'An error occurred while logging you in. Please try again.');
+          console.log(err);
+          return res.redirect("/register");
         }
+  
+
         return res.redirect("/secrets");
+      });
     });
-})
+  });
+  
 
+  app.post("/login", (req, res, next) => {
+    const { username, password } = req.body;
+  
+    if (!username || !password) {
+      req.flash('error', 'Please enter both your email and password.');
+      return res.redirect("/login");
+    }
+  
+    passport.authenticate('local', {
+      successRedirect: "/secrets",
+      failureRedirect: "/login",
+      failureFlash: true
+    })(req, res, next);
+  });
+  
 app.get("/logout", (req, res) => {
     req.logout((err) => {
         if (err) {
