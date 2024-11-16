@@ -11,6 +11,8 @@ const FacebookStrategy = require('passport-facebook').Strategy;
 const GitHubStrategy = require('passport-github').Strategy;
 const findOrCreate = require('mongoose-findorcreate');
 const flash = require('connect-flash');
+require('dotenv').config();
+
 
 
 const app = express();
@@ -29,7 +31,11 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-mongoose.connect("mongodb://localhost:27017/userDB");
+const url = process.env.MONGO_URI
+
+mongoose.connect(url)
+    .then(() => console.log("Connected to MongoDB Atlas"))
+    .catch((err) => console.log("Error connecting to MongoDB Atlas:", err));
 
 const userSchema = new mongoose.Schema({
     username: String,
@@ -141,8 +147,10 @@ app.get("/register", (req, res) => {
 app.get("/secrets", (req, res) => {
     User.find({ "secret": { $ne: null } })
         .then(foundUsers => {
-            res.render("secrets", { usersWithSecrets: foundUsers, user: req.user,
-                isAuthenticated: req.isAuthenticated() });
+            res.render("secrets", {
+                usersWithSecrets: foundUsers, user: req.user,
+                isAuthenticated: req.isAuthenticated()
+            });
         })
         .catch(err => {
             console.log(err);
@@ -182,48 +190,48 @@ app.post("/submit", (req, res) => {
 
 app.post("/register", (req, res) => {
     const { username, password } = req.body;
-  
+
     if (!username || !password) {
-      req.flash('error', 'Please enter both your email and password.');
-      return res.redirect("/register");
+        req.flash('error', 'Please enter both your email and password.');
+        return res.redirect("/register");
     }
 
     User.register({ username }, password, (err, user) => {
-      if (err) {
-        req.flash('error', 'An error occurred while registering. Please try again.');
-        console.log(err);
-        return res.redirect("/register");
-      }
-  
-      req.logIn(user, (err) => {
         if (err) {
-          req.flash('error', 'An error occurred while logging you in. Please try again.');
-          console.log(err);
-          return res.redirect("/register");
+            req.flash('error', 'An error occurred while registering. Please try again.');
+            console.log(err);
+            return res.redirect("/register");
         }
-  
 
-        return res.redirect("/secrets");
-      });
+        req.logIn(user, (err) => {
+            if (err) {
+                req.flash('error', 'An error occurred while logging you in. Please try again.');
+                console.log(err);
+                return res.redirect("/register");
+            }
+
+
+            return res.redirect("/secrets");
+        });
     });
-  });
-  
+});
 
-  app.post("/login", (req, res, next) => {
+
+app.post("/login", (req, res, next) => {
     const { username, password } = req.body;
-  
+
     if (!username || !password) {
-      req.flash('error', 'Please enter both your email and password.');
-      return res.redirect("/login");
+        req.flash('error', 'Please enter both your email and password.');
+        return res.redirect("/login");
     }
-  
+
     passport.authenticate('local', {
-      successRedirect: "/secrets",
-      failureRedirect: "/login",
-      failureFlash: true
+        successRedirect: "/secrets",
+        failureRedirect: "/login",
+        failureFlash: true
     })(req, res, next);
-  });
-  
+});
+
 app.get("/logout", (req, res) => {
     req.logout((err) => {
         if (err) {
@@ -234,6 +242,6 @@ app.get("/logout", (req, res) => {
 });
 
 
-app.listen(3000, () => {
+app.listen(process.env.PORT || 3000, () => {
     console.log("Server running on port 3000.")
 })
