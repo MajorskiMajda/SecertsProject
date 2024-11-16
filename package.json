@@ -4,7 +4,8 @@
   "description": "A web app to post secrets anonymously - Authentificate Users and Store Sessions",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+     "start": "node app.js"
   },
   "author": "Majda Majorski",
   "license": "ISC",
