@@ -4,7 +4,7 @@
   <h1>Login</h1>
   <% if (error && error.length > 0) { %>
     <div class="alert alert-danger">
-      <%= error[0] %> <!-- Display the first error message -->
+      <%= error[0] %> 
     </div>
   <% } %>
 
@@ -13,7 +13,6 @@
       <div class="card">
         <div class="card-body">
 
-          <!-- Makes POST request to /login route -->
           <form action="/login" method="POST">
             <div class="form-group">
               <label for="username">Email</label>
